@@ -1,6 +1,7 @@
 """
 Multi Decorator module
 """
+
 from shapash.explainer.smart_state import SmartState
 
 
@@ -14,9 +15,11 @@ class MultiDecorator:
         self.member = member
 
     def __getattr__(self, item):
-        if item in [x for x in dir(SmartState) if not x.startswith('__')]:
+        if item in [x for x in dir(SmartState) if not x.startswith("__")]:
+
             def wrapper(*args, **kwargs):
                 return self.delegate(item, *args, **kwargs)
+
             return wrapper
         else:
             return self.__getattribute__(item)
@@ -73,8 +76,7 @@ class MultiDecorator:
         """
         if not args:
             raise ValueError(
-                '{} is applied without arguments,'
-                'please check that you have specified contributions.'.format(name)
+                f"{name} is applied without arguments," "please check that you have specified contributions."
             )
 
     def check_method(self, method, name):
@@ -94,9 +96,7 @@ class MultiDecorator:
             Raise if not callable.
         """
         if not callable(method):
-            raise ValueError(
-                '{} is not an allowed function, please check for any typo'.format(name)
-            )
+            raise ValueError(f"{name} is not an allowed function, please check for any typo")
 
     def check_first_arg(self, arg, name):
         """
@@ -116,8 +116,8 @@ class MultiDecorator:
         """
         if not isinstance(arg, list):
             raise ValueError(
-                '{} is not applied to a list of contributions,'
-                'please check that you are dealing with a multi-class problem.'.format(name)
+                f"{name} is not applied to a list of contributions,"
+                "please check that you are dealing with a multi-class problem."
             )
 
     def assign_contributions(self, ranked):
@@ -139,7 +139,7 @@ class MultiDecorator:
         ValueError
             The output of a single call to rank_contributions should always be of length three.
         """
-        dicts = self.delegate('assign_contributions', ranked)
+        dicts = self.delegate("assign_contributions", ranked)
         keys = list(dicts[0].keys())
         return {key: [d[key] for d in dicts] for key in keys}
 
@@ -160,7 +160,7 @@ class MultiDecorator:
         Bool
             True if all inputs share same shape and index with the prediction set.
         """
-        bools = self.delegate('check_contributions', contributions, x_init, features_names)
+        bools = self.delegate("check_contributions", contributions, x_init, features_names)
         return all(bools)
 
     def combine_masks(self, masks):
@@ -178,7 +178,7 @@ class MultiDecorator:
             Combination of all masks.
         """
         transposed_masks = list(map(list, zip(*masks)))
-        return self.delegate('combine_masks', transposed_masks)
+        return self.delegate("combine_masks", transposed_masks)
 
     def compute_masked_contributions(self, s_contrib, masks):
         """
@@ -198,7 +198,7 @@ class MultiDecorator:
             List of masked contributions (pandas.Series).
         """
         arg_tup = list(zip(s_contrib, masks))
-        return self.delegate('compute_masked_contributions', arg_tup)
+        return self.delegate("compute_masked_contributions", arg_tup)
 
     def summarize(self, s_contribs, var_dicts, xs_sorted, masks, columns_dict, features_dict):
         """
@@ -225,25 +225,25 @@ class MultiDecorator:
             Result of the summarize step
         """
         arg_tup = list(zip(s_contribs, var_dicts, xs_sorted, masks))
-        return self.delegate('summarize', arg_tup, columns_dict, features_dict)
+        return self.delegate("summarize", arg_tup, columns_dict, features_dict)
 
-    def compute_features_import(self, contributions):
+    def compute_features_import(self, contributions, norm=1):
         """
         Compute a relative features importance, sum of absolute values
-         ​​of the contributions for each
-         features importance compute in base 100
+        of the contributions for each
+        features importance compute in base 100
 
         Parameters
         ----------
         contributions : list
-             list of pandas.DataFrames containing contributions
+            list of pandas.DataFrames containing contributions
 
         Returns
         -------
         list
             list of features importance pandas.series
         """
-        return self.delegate('compute_features_import', contributions)
+        return self.delegate("compute_features_import", contributions, norm)
 
     def compute_grouped_contributions(self, contributions, features_groups):
         """
@@ -260,4 +260,4 @@ class MultiDecorator:
         -------
         pd.DataFrame
         """
-        return self.delegate('compute_grouped_contributions', contributions, features_groups)
+        return self.delegate("compute_grouped_contributions", contributions, features_groups)

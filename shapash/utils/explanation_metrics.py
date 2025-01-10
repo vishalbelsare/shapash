@@ -41,7 +41,7 @@ def _compute_distance(x1, x2, mean_vector, epsilon=0.0000001):
     Returns
     -------
     diff : float
-        Returns :math:`\\sum(\\frac{|x1-x2|}{mean\_vector+epsilon})`
+        Returns :math:`\\sum(\\frac{|x1-x2|}{mean\\_vector+epsilon})`
     """
     diff = np.sum(np.abs(x1 - x2) / (mean_vector + epsilon))
     return diff
@@ -97,7 +97,8 @@ def _get_radius(dataset, n_neighbors, sample_size=500, percentile=95):
     # Select 500 points max to sample
     size = min([dataset.shape[0], sample_size])
     # Randomly sample points from dataset
-    sampled_instances = dataset[np.random.randint(0, dataset.shape[0], size), :]
+    rng = np.random.default_rng(seed=79)
+    sampled_instances = dataset[rng.integers(0, dataset.shape[0], size), :]
     # Define normalization vector
     mean_vector = np.array(dataset, dtype=np.float32).std(axis=0)
     # Initialize the similarity matrix
@@ -109,9 +110,9 @@ def _get_radius(dataset, n_neighbors, sample_size=500, percentile=95):
             similarity_distance[i, j] = dist
             similarity_distance[j, i] = dist
     # Select top n_neighbors
-    ordered_X = np.sort(similarity_distance)[:, 1: n_neighbors + 1]
+    ordered_x = np.sort(similarity_distance)[:, 1 : n_neighbors + 1]
     # Select the value of the distance that captures XX% of all distances (percentile)
-    return np.percentile(ordered_X.flatten(), percentile)
+    return np.percentile(ordered_x.flatten(), percentile)
 
 
 def find_neighbors(selection, dataset, model, mode, n_neighbors=10):
@@ -186,6 +187,7 @@ def find_neighbors(selection, dataset, model, mode, n_neighbors=10):
         all_neighbors[i] = neighbors[neighbors[:, -2] < radius]
     return all_neighbors
 
+
 def shap_neighbors(instance, x_encoded, contributions, mode):
     """
     For an instance and corresponding neighbors, calculate various
@@ -211,8 +213,11 @@ def shap_neighbors(instance, x_encoded, contributions, mode):
     """
     # Extract SHAP values for instance and neighbors
     # :-2 indicates that two columns are disregarded : distance to instance and model output
-    ind = pd.merge(x_encoded.reset_index(), pd.DataFrame(instance[:, :-2], columns=x_encoded.columns), how='inner')\
-        .set_index(x_encoded.index.name if x_encoded.index.name is not None else 'index').index
+    ind = (
+        pd.merge(x_encoded.reset_index(), pd.DataFrame(instance[:, :-2], columns=x_encoded.columns), how="inner")
+        .set_index(x_encoded.index.name if x_encoded.index.name is not None else "index")
+        .index
+    )
     # If classification, select contrbutions of one class only
     if mode == "classification" and len(contributions) == 2:
         contributions = contributions[1]
@@ -223,11 +228,15 @@ def shap_neighbors(instance, x_encoded, contributions, mode):
     norm_abs_shap_values = normalize(np.abs(shap_values), axis=1, norm="l1")
     # Compute the average difference between the instance and its neighbors
     # And replace NaN with 0
-    average_diff = np.divide(norm_shap_values.std(axis=0), norm_abs_shap_values.mean(axis=0),
-                             out=np.zeros(norm_abs_shap_values.shape[1]),
-                             where=norm_abs_shap_values.mean(axis=0) != 0)
+    average_diff = np.divide(
+        norm_shap_values.std(axis=0),
+        norm_abs_shap_values.mean(axis=0),
+        out=np.zeros(norm_abs_shap_values.shape[1]),
+        where=norm_abs_shap_values.mean(axis=0) != 0,
+    )
 
     return norm_shap_values, average_diff, norm_abs_shap_values[0, :]
+
 
 def get_min_nb_features(selection, contributions, mode, distance):
     """
@@ -237,13 +246,13 @@ def get_min_nb_features(selection, contributions, mode, distance):
 
     The closeness is defined via the following distances:
 
-    * For regression: 
+    * For regression:
 
         .. math::
-        
+
             distance = \\frac{|output_{allFeatures} - output_{currentFeatures}|}{|output_{allFeatures}|}
 
-    * For classification: 
+    * For classification:
 
         .. math::
 
@@ -277,7 +286,7 @@ def get_min_nb_features(selection, contributions, mode, distance):
         output_value = np.sum(contributions[i, :])
 
         score = 0
-        for j, idx in enumerate(ids):
+        for j, idx in enumerate(ids):  # noqa: B007
             # j : number of features needed
             # idx : positions of the j top shap values
             score += contributions[i, idx]
@@ -311,9 +320,9 @@ def get_distance(selection, contributions, mode, nb_features):
     -------
     distance : array
         List of distances for each instance by using top selected features (ex: np.array([0.12, 0.16...])).
-        
+
         * For regression:
-            
+
             * normalized distance between the output of current model and output of full model
 
         * For classifciation:

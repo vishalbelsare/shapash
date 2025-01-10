@@ -1,6 +1,7 @@
 """
 Filters module
 """
+
 import numpy as np
 import pandas as pd
 
@@ -93,11 +94,7 @@ def cutoff_contributions_old(dataframe, max_contrib):
     """
     mask = np.full_like(dataframe, False).astype(bool)
     mask[:, :max_contrib] = True
-    return pd.DataFrame(
-        mask,
-        columns=dataframe.columns,
-        index=dataframe.index
-    )
+    return pd.DataFrame(mask, columns=dataframe.columns, index=dataframe.index)
 
 
 def cutoff_contributions(mask, k=10):
@@ -117,7 +114,11 @@ def cutoff_contributions(mask, k=10):
     pd.Dataframe
         Mask where only the k-top contributions are considered.
     """
-    return mask.replace(False, np.nan).cumsum(axis=1).isin(range(1, k+1))
+    # Convert False values to np.nan explicitly without changing data type
+    mask_nan = mask.astype(float).replace(0, np.nan)
+
+    # Compute the cumulative sum and check if the index is within the top-k
+    return mask_nan.cumsum(axis=1).isin(range(1, k + 1))
 
 
 def combine_masks(masks_list):
@@ -138,13 +139,11 @@ def combine_masks(masks_list):
     """
 
     if len(set(map(lambda x: x.shape, masks_list))) != 1:
-        raise ValueError('Masks must have same dimensions.')
+        raise ValueError("Masks must have same dimensions.")
 
     masks_cube = np.dstack(masks_list)
     mask_final = np.min(masks_cube, axis=2)
 
     return pd.DataFrame(
-        mask_final,
-        columns=['contrib_{}'.format(i+1) for i in range(mask_final.shape[1])],
-        index=masks_list[0].index
+        mask_final, columns=[f"contrib_{i + 1}" for i in range(mask_final.shape[1])], index=masks_list[0].index
     )

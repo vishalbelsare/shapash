@@ -1,12 +1,67 @@
 """
 Utils is a group of function for the library
 """
+
+import math
+import socket
+
 import numpy as np
 import pandas as pd
-import socket
-import math
-from shapash.explainer.smart_state import SmartState
+
 from shapash.explainer.multi_decorator import MultiDecorator
+from shapash.explainer.smart_state import SmartState
+
+
+def adjust_title_height(figure_height=500):
+    """
+    Adjust the height of the title according to height of the figure
+
+    Parameters
+    ----------
+    figure_height : int
+        height of the figure
+
+    Returns
+    -------
+    int
+        height of the title
+    """
+
+    return 1 - 0.1 * 500 / figure_height
+
+
+def suffix_duplicates(lst):
+    """
+    Adds suffixes (_2, _3, ...) to non-unique elements in a list to make them unique.
+
+    Args:
+        lst (list): The input list of elements (strings) which may contain duplicates.
+
+    Returns:
+        list: A new list where non-unique elements have suffixes to ensure uniqueness.
+
+    Example:
+        Input: ["feature1", "feature2", "feature1", "feature2", "feature3"]
+        Output: ["feature1", "feature2", "feature1_2", "feature2_2", "feature3"]
+    """
+
+    seen = {}
+    result = []
+
+    for item in lst:
+        if item in seen:
+            # If the item has been seen before, increment its count and add a suffix
+            seen[item] += 1
+            new_item = f"{item}_{seen[item] + 1}"
+        else:
+            # If the item is seen for the first time, add it without a suffix
+            seen[item] = 0
+            new_item = item
+
+        result.append(new_item)
+
+    return result
+
 
 def get_host_name():
     """
@@ -68,14 +123,15 @@ def is_nested_list(object_param):
     """
     return any(isinstance(elem, list) for elem in object_param)
 
-def add_line_break(text, nbchar, maxlen=150):
+
+def add_line_break(value, nbchar, maxlen=150):
     """
     adding line break in string if necessary
 
     Parameters
     ----------
-    text : string
-        string to check in order to add line break
+    value : string or oither type
+        if string to check in order to add line break
     nbchar : int
         number of characters before line break
     maxlen : int
@@ -86,10 +142,10 @@ def add_line_break(text, nbchar, maxlen=150):
     string
         original text + line break
     """
-    if isinstance(text,str):
+    if isinstance(value, str):
         length = 0
         tot_length = 0
-        input_word = text.split()
+        input_word = value.split()
         final_sep = []
         for w in input_word[:-1]:
             length = length + len(w)
@@ -97,20 +153,21 @@ def add_line_break(text, nbchar, maxlen=150):
             if tot_length <= maxlen:
                 if length >= nbchar:
                     length = 0
-                    final_sep.append('<br />')
+                    final_sep.append("<br />")
                 else:
-                    final_sep.append(' ')
+                    final_sep.append(" ")
         if len(final_sep) == len(input_word) - 1:
-            last_char=''
-        else :
-            last_char=('...')
+            last_char = ""
+        else:
+            last_char = "..."
 
-        new_string = "".join(sum(zip(input_word, final_sep+['']), ())[:-1]) + last_char
+        new_string = "".join(sum(zip(input_word, final_sep + [""]), ())[:-1]) + last_char
         return new_string
     else:
-        return text
+        return value
 
-def truncate_str(text, maxlen= 40):
+
+def truncate_str(text, maxlen=40):
     """
     truncate a string
 
@@ -137,10 +194,11 @@ def truncate_str(text, maxlen= 40):
 
         text = " ".join(output_words)
         if len(input_words) > len(output_words):
-            text = text + '...'
+            text = text + "..."
     return text
 
-def compute_digit_number(value):
+
+def compute_digit_number(value, significant_digits: int = 4):
     """
     return int, number of digits to display
 
@@ -148,21 +206,29 @@ def compute_digit_number(value):
     ----------
     value : float
         can be the gap between percentiles
+    significant_digits : int, optional, default=4
+        Fixed number of significant digits to display.
 
     Returns
     -------
     int
         number of digits
     """
+    if isinstance(value, np.ndarray):
+        scalar_value = value.item()
+    else:
+        scalar_value = value
+
     # fix for 0 value
-    if(value == 0):
+    if scalar_value == 0:
         first_nz = 1
     else:
-        first_nz = int(math.log10(abs(value)))
-    digit = abs(min(3, first_nz) - 3)
+        first_nz = math.ceil(math.log10(abs(scalar_value)))
+    digit = abs(min(significant_digits, first_nz) - significant_digits)
     return digit
 
-def add_text(text_list,sep):
+
+def add_text(text_list, sep):
     """
     return int, number of digits to display
 
@@ -178,8 +244,9 @@ def add_text(text_list,sep):
     int
         number of digits
     """
-    clean_list = [x for x in text_list if x not in ['', None]]
+    clean_list = [x for x in text_list if x not in ["", None]]
     return sep.join(clean_list)
+
 
 def maximum_difference_sort_value(contributions):
     """
@@ -232,7 +299,9 @@ def compute_sorted_variables_interactions_list_indices(interaction_values):
     for i in range(tmp.shape[0]):
         tmp[i, i:] = 0
 
-    interaction_contrib_sorted_indices = np.dstack(np.unravel_index(np.argsort(tmp.ravel()), tmp.shape))[0][::-1]
+    interaction_contrib_sorted_indices = np.dstack(np.unravel_index(np.argsort(tmp.ravel(), kind="stable"), tmp.shape))[
+        0
+    ][::-1]
     return interaction_contrib_sorted_indices
 
 
@@ -295,7 +364,7 @@ def choose_state(contributions):
         return SmartState()
 
 
-def convert_string_to_int_keys(input_dict: dict) -> dict:    
+def convert_string_to_int_keys(input_dict: dict) -> dict:
     """
     Returns the dict with integer keys instead of string keys
 
@@ -307,5 +376,61 @@ def convert_string_to_int_keys(input_dict: dict) -> dict:
     -------
     dict
     """
-    return {int(k): v for k,v in input_dict.items()}
+    return {int(k): v for k, v in input_dict.items()}
 
+
+def tuning_colorscale(init_colorscale, values, keep_90_pct=False):
+    """
+    Adjusts the color scale based on the distribution of points.
+
+    This function modifies the color scale used for visualization according to
+    the distribution of the provided values. Optionally, it can exclude the top and bottom
+    5% of values to focus on the core distribution of data.
+
+    Parameters
+    ----------
+    values : pd.DataFrame
+        A one-column DataFrame containing the values for which quantiles need to be calculated.
+    keep_90_pct : bool, optional
+        If True, the function adjusts the color scale to cover the central 90% of the data,
+        excluding the lowest 5% and the highest 5%. Defaults to False.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the adjusted color scale, the minimum value, and the maximum value
+        used for the color scale adjustment.
+    """
+    # Extract the first column of values
+    data = values.iloc[:, 0]
+
+    # Initialize variables for min and max values
+    cmin, cmax = None, None
+
+    # Check if there is only one unique value
+    if data.nunique() == 1:
+        unique_value = data.iloc[0]
+        cmin, cmax = unique_value, unique_value
+        # Create a color scale where all values map to the unique value
+        color_scale = [(i / (len(init_colorscale) - 1), color) for i, color in enumerate(init_colorscale)]
+        return color_scale, cmin, cmax
+
+    if keep_90_pct:
+        # Calculate quantiles to exclude the extreme 10% of values
+        lower_quantile = data.quantile(0.05)
+        upper_quantile = data.quantile(0.95)
+        data_tmp = data[(data >= lower_quantile) & (data <= upper_quantile)]
+        if (len(data_tmp) > 200) and (data_tmp.nunique() > 1):
+            data = data_tmp
+        cmin, cmax = data.min(), data.max()
+
+    # Calculate only the quantiles corresponding to the color scale
+    quantiles = data.quantile(np.linspace(0, 1, len(init_colorscale)))
+
+    # Normalize quantiles to a 0-1 scale
+    min_pred, max_pred = quantiles.min(), quantiles.max()
+    normalized_quantiles = (quantiles - min_pred) / (max_pred - min_pred)
+
+    # Build the color scale
+    color_scale = [(value, color) for value, color in zip(normalized_quantiles, init_colorscale)]
+    return color_scale, cmin, cmax

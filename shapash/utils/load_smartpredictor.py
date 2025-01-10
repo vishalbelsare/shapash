@@ -1,6 +1,7 @@
 """
 load_smartpredictor module
 """
+
 from shapash.explainer.smart_predictor import SmartPredictor
 from shapash.utils.io import load_pickle
 
@@ -22,6 +23,4 @@ def load_smartpredictor(path):
     if isinstance(predictor, SmartPredictor):
         return predictor
     else:
-        raise ValueError(
-            f"{predictor} is not an instance of type SmartPredictor"
-        )
+        raise ValueError(f"{predictor} is not an instance of type SmartPredictor")

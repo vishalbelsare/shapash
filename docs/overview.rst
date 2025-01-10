@@ -55,6 +55,7 @@ Getting Started : 3 minutes to Shapash
 The 4 steps to display results:
 
 - Step 1: Declare SmartExplainer Object
+  > There 1 mandatory parameter in compile method: Model
   > You can declare features dict here to specify the labels Shapash will display
 
 .. code:: ipython
@@ -68,14 +69,17 @@ The 4 steps to display results:
     )
 
 
-- Step 2: Compile Model, Dataset, Encoders, ...
-  > There are 2 mandatory parameters in the compile method: *Model* and *Dataset*
+- Step 2: Compile Dataset, ...
+  > There 1 mandatory parameter in compile method: *Dataset*
 
 .. code:: ipython
 
     xpl.compile(
-        x=Xtest,    
-        y_pred=y_pred, # Optional    
+        x=Xtest,
+        y_pred=y_pred, # Optional: for your own prediction (by default: model.predict)
+        y_target=yTest, # Optional: allows to display True Values vs Predicted Values
+        additional_data=X_additional, # Optional: additional dataset of features for Webapp
+        additional_features_dict=features_dict_additional, # Optional: dict additional data
     )
 
 - Step 3: Display output

@@ -1,22 +1,23 @@
-from category_encoders import OrdinalEncoder
-import copy
 import itertools
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from category_encoders import OrdinalEncoder
 from plotly import graph_objs as go
 from plotly.offline import plot
 from plotly.subplots import make_subplots
 from sklearn.manifold import MDS
 
-from shapash import SmartExplainer
-from shapash.style.style_utils import colors_loading, select_palette, define_style
+from shapash.style.style_utils import colors_loading, define_style, select_palette
+from shapash.utils.utils import adjust_title_height
 
 
-class Consistency():
+class Consistency:
+    """Consistency class"""
 
-    def __init__(self):
-        self._palette_name = list(colors_loading().keys())[0]
+    def __init__(self, palette_name="default"):
+        self._palette_name = palette_name
         self._style_dict = define_style(select_palette(colors_loading(), self._palette_name))
 
     def tuning_colorscale(self, values):
@@ -24,27 +25,27 @@ class Consistency():
         Parameters
         ----------
         values: 1 column pd.DataFrame
-            values ​​whose quantiles must be calculated
+            values whose quantiles must be calculated
         """
         desc_df = values.describe(percentiles=np.arange(0.1, 1, 0.1).tolist())
-        min_pred, max_init = list(desc_df.loc[['min', 'max']].values)
-        desc_pct_df = (desc_df.loc[~desc_df.index.isin(['count', 'mean', 'std'])] - min_pred) / \
-                      (max_init - min_pred)
+        min_pred, max_init = list(desc_df.loc[["min", "max"]].values)
+        desc_pct_df = (desc_df.loc[~desc_df.index.isin(["count", "mean", "std"])] - min_pred) / (max_init - min_pred)
         color_scale = list(map(list, (zip(desc_pct_df.values.flatten(), self._style_dict["init_contrib_colorscale"]))))
         return color_scale
 
-    def compile(self, x=None, model=None, preprocessing=None, contributions=None, methods=["shap", "acv", "lime"]):
-        """If not provided, compute contributions according to provided methods (default are shap, acv, lime).
-        If provided, check whether they respect the correct format:
+    def compile(self, contributions, x=None, preprocessing=None):
+        """Check whether the contributions respect the correct format:
         contributions = {"method_name_1": contrib_1, "method_name_2": contrib_2, ...}
         where each contrib_i is a pandas DataFrame
 
         Parameters
         ----------
+        contributions : dict
+            Contributions provided by the user if no compute is required.
+            Format must be {"method_name_1": contrib_1, "method_name_2": contrib_2, ...}
+            where each contrib_i is a pandas DataFrame. By default None
         x : DataFrame, optional
             Dataset on which to compute consistency metrics, by default None
-        model : model object, optional
-            Model used to compute contributions, by default None
         preprocessing : category_encoders, ColumnTransformer, list, dict, optional (default: None)
             --> Differents types of preprocessing are available:
 
@@ -54,71 +55,16 @@ class Consistency():
             - A list with a single ColumnTransformer with optional (dict, list of dict)
             - A dict
             - A list of dict
-        contributions : dict, optional
-            Contributions provided by the user if no compute is required.
-            Format must be {"method_name_1": contrib_1, "method_name_2": contrib_2, ...}
-            where each contrib_i is a pandas DataFrame. By default None
-        methods : list
-            Methods used to compute contributions, by default ["shap", "acv", "lime"]
         """
         self.x = x
         self.preprocessing = preprocessing
-        if contributions is None:
-            if (self.x is None) or (model is None):
-                raise ValueError('If no contributions are provided, parameters "x" and "model" must be defined')
-            contributions = self.compute_contributions(self.x, model, methods, self.preprocessing)
-        else:
-            if not isinstance(contributions, dict):
-                raise ValueError('Contributions must be a dictionary')
+        if not isinstance(contributions, dict):
+            raise ValueError("Contributions must be a dictionary")
         self.methods = list(contributions.keys())
         self.weights = list(contributions.values())
 
         self.check_consistency_contributions(self.weights)
         self.index = self.weights[0].index
-
-    def compute_contributions(self, x, model, methods, preprocessing):
-        """
-        Compute contributions based on specified methods
-
-        Parameters
-        ----------
-        x : pandas.DataFrame
-            Prediction set.
-            IMPORTANT: this should be the raw prediction set, whose values are seen by the end user.
-            x is a preprocessed dataset: Shapash can apply the model to it
-        model : model object
-            Model used to consistency check. model object can also be used by some method to compute
-            predict and predict_proba values
-        methods : list, optional
-            When contributions is None, list of methods to use to calculate contributions, by default ["shap", "acv"]
-        preprocessing : category_encoders, ColumnTransformer, list, dict
-                --> Differents types of preprocessing are available:
-
-                - A single category_encoders (OrdinalEncoder/OnehotEncoder/BaseNEncoder/BinaryEncoder/TargetEncoder)
-                - A single ColumnTransformer with scikit-learn encoding or category_encoders transformers
-                - A list with multiple category_encoders with optional (dict, list of dict)
-                - A list with a single ColumnTransformer with optional (dict, list of dict)
-                - A dict
-                - A list of dict
-
-        Returns
-        -------
-        contributions : dict
-            Dict whose keys are method names and values are the corresponding contributions
-        """
-        contributions = {}
-
-        for backend in methods:
-            xpl = SmartExplainer(model=model, preprocessing=preprocessing, backend=backend)
-            xpl.compile(x=x)
-            if xpl._case == "classification" and len(xpl._classes) == 2:
-                contributions[backend] = xpl.contributions[1]
-            elif xpl._case == "classification" and len(xpl._classes) > 2:
-                raise AssertionError("Multi-class classification is not supported")
-            else:
-                contributions[backend] = xpl.contributions
-
-        return contributions
 
     def check_consistency_contributions(self, weights):
         """
@@ -131,15 +77,15 @@ class Consistency():
             List of contributions from different methods
         """
         if weights[0].ndim == 1:
-            raise ValueError('Multiple datapoints are required to compute the metric')
+            raise ValueError("Multiple datapoints are required to compute the metric")
         if not all(isinstance(x, pd.DataFrame) for x in weights):
-            raise ValueError('Contributions must be pandas DataFrames')
+            raise ValueError("Contributions must be pandas DataFrames")
         if not all(x.shape == weights[0].shape for x in weights):
-            raise ValueError('Contributions must be of same shape')
+            raise ValueError("Contributions must be of same shape")
         if not all(x.columns.tolist() == weights[0].columns.tolist() for x in weights):
-            raise ValueError('Columns names are different between contributions')
+            raise ValueError("Columns names are different between contributions")
         if not all(x.index.tolist() == weights[0].index.tolist() for x in weights):
-            raise ValueError('Index names are different between contributions')
+            raise ValueError("Index names are different between contributions")
 
     def consistency_plot(self, selection=None, max_features=20):
         """
@@ -167,16 +113,17 @@ class Consistency():
             weights = [weight.values for weight in self.weights]
         elif isinstance(selection, list):
             if len(selection) == 1:
-                raise ValueError('Selection must include multiple points')
+                raise ValueError("Selection must include multiple points")
             else:
                 weights = [weight.values[selection] for weight in self.weights]
         else:
-            raise ValueError('Parameter selection must be a list')
+            raise ValueError("Parameter selection must be a list")
 
         all_comparisons, mean_distances = self.calculate_all_distances(self.methods, weights)
 
-        method_1, method_2, l2, index, backend_name_1, backend_name_2 = \
-            self.find_examples(mean_distances, all_comparisons, weights)
+        method_1, method_2, l2, index, backend_name_1, backend_name_2 = self.find_examples(
+            mean_distances, all_comparisons, weights
+        )
 
         self.plot_comparison(mean_distances)
         self.plot_examples(method_1, method_2, l2, index, backend_name_1, backend_name_2, max_features)
@@ -210,7 +157,12 @@ class Consistency():
             l2_dist = self.calculate_pairwise_distances(weights, index_i, index_j)
             # Populate the (n choose 2)x4 array
             pairwise_comparison = np.column_stack(
-                (np.repeat(index_i, len(l2_dist)), np.repeat(index_j, len(l2_dist)), np.arange(len(l2_dist)), l2_dist,)
+                (
+                    np.repeat(index_i, len(l2_dist)),
+                    np.repeat(index_j, len(l2_dist)),
+                    np.arange(len(l2_dist)),
+                    l2_dist,
+                )
             )
             all_comparisons = np.concatenate((all_comparisons, pairwise_comparison), axis=0)
 
@@ -303,7 +255,9 @@ class Consistency():
         l2 = []
 
         # Evenly split the scale of L2 distances (from min to max excluding 0)
-        for i in np.linspace(start=mean_distances[mean_distances > 0].min().min(), stop=mean_distances.max().max(), num=5):
+        for i in np.linspace(
+            start=mean_distances[mean_distances > 0].min().min(), stop=mean_distances.max().max(), num=5
+        ):
             # For each split, find the closest existing L2 distance
             closest_l2 = all_comparisons[:, -1][np.abs(all_comparisons[:, -1] - i).argmin()]
             # Return the row that contains this L2 distance
@@ -352,17 +306,24 @@ class Consistency():
         mean_distances : DataFrame
             DataFrame storing all pairwise distances between methods
         """
-        font = {"family": "Arial", "color": '#{:02x}{:02x}{:02x}'.format(50, 50, 50)}
+        font = {"color": f"#{50:02x}{50:02x}{50:02x}"}
 
         fig, ax = plt.subplots(ncols=1, figsize=(10, 6))
 
-        ax.text(x=0.5, y=1.04, s="Consistency of explanations:", fontsize=24, ha="center", transform=fig.transFigure, **font)
-        ax.text(x=0.5, y=0.98, s="How similar are explanations from different methods?",
-                fontsize=18, ha="center", transform=fig.transFigure, **font)
-
-        ax.set_title(
-            "Average distances between the explanations", fontsize=14, pad=-60
+        ax.text(
+            x=0.5, y=1.04, s="Consistency of explanations:", fontsize=24, ha="center", transform=fig.transFigure, **font
         )
+        ax.text(
+            x=0.5,
+            y=0.98,
+            s="How similar are explanations from different methods?",
+            fontsize=18,
+            ha="center",
+            transform=fig.transFigure,
+            **font,
+        )
+
+        ax.set_title("Average distances between the explanations", fontsize=14, pad=-60)
 
         coords = self.calculate_coords(mean_distances)
 
@@ -385,9 +346,9 @@ class Consistency():
             )
 
         # set gray background
-        ax.set_facecolor('#F5F5F2')
+        ax.set_facecolor("#F5F5F2")
         # draw solid white grid lines
-        ax.grid(color='w', linestyle='solid')
+        ax.grid(color="w", linestyle="solid")
 
         lim = (coords.min().min(), coords.max().max())
         margin = 0.1 * (lim[1] - lim[0])
@@ -449,8 +410,8 @@ class Consistency():
         figure
         """
         y = np.arange(method_1[0].shape[0])
-        fig, axes = plt.subplots(ncols=len(l2), figsize=(3*len(l2), 4))
-        fig.subplots_adjust(wspace=.3, top=.8)
+        fig, axes = plt.subplots(ncols=len(l2), figsize=(3 * len(l2), 4))
+        fig.subplots_adjust(wspace=0.3, top=0.8)
         if len(l2) == 1:
             axes = np.array([axes])
         fig.suptitle("Examples of explanations' comparisons for various distances (L2 norm)")
@@ -465,27 +426,44 @@ class Consistency():
             idx = np.flip(i.argsort())
             i, j = i[idx], j[idx]
 
-            axes[n].barh(y, i, label='method 1', left=0, color='#{:02x}{:02x}{:02x}'.format(255, 166, 17))
-            axes[n].barh(y, j, label='method 2', left=np.abs(np.max(i)) + np.abs(np.min(j)) + np.max(i)/3,
-                         color='#{:02x}{:02x}{:02x}'.format(117, 152, 189))  # /3 to add space
+            axes[n].barh(y, i, label="method 1", left=0, color=f"#{255:02x}{166:02x}{17:02x}")
+            axes[n].barh(
+                y,
+                j,
+                label="method 2",
+                left=np.abs(np.max(i)) + np.abs(np.min(j)) + np.max(i) / 3,
+                color=f"#{117:02x}{152:02x}{189:02x}",
+            )  # /3 to add space
 
             # set gray background
-            axes[n].set_facecolor('#F5F5F2')
+            axes[n].set_facecolor("#F5F5F2")
             # draw solid white grid lines
-            axes[n].grid(color='w', linestyle='solid')
+            axes[n].grid(color="w", linestyle="solid")
 
-            axes[n].set(title="%s: %s" %
-                        (self.index.name if self.index.name is not None else "Id", l) + "\n$d_{L2}$ = " + str(round(k, 2)))
+            axes[n].set(
+                title="{}: {}".format(self.index.name if self.index.name is not None else "Id", l)
+                + "\n$d_{L2}$ = "
+                + str(round(k, 2))
+            )
             axes[n].set_xlabel("Contributions")
             axes[n].set_ylabel(f"Top {max_features} features")
-            axes[n].set_xticks([0, np.abs(np.max(i)) + np.abs(np.min(j)) + np.max(i)/3])
+            axes[n].set_xticks([0, np.abs(np.max(i)) + np.abs(np.min(j)) + np.max(i) / 3])
             axes[n].set_xticklabels([m, o])
             axes[n].set_yticks([])
 
         return fig
 
-    def pairwise_consistency_plot(self, methods, selection=None,
-                                  max_features=10, max_points=100, file_name=None, auto_open=False):
+    def pairwise_consistency_plot(
+        self,
+        methods,
+        selection=None,
+        max_features=10,
+        max_points=100,
+        file_name=None,
+        auto_open=False,
+        width=1000,
+        height="auto",
+    ):
         """The Pairwise_Consistency_plot compares the difference of 2 explainability methods across each feature and each data point,
         and plots the distribution of those differences.
 
@@ -510,6 +488,10 @@ class Consistency():
             Specify the save path of html files. If it is not provided, no file will be saved.
         auto_open: bool
             open automatically the plot, by default False
+        height : str or int, optional
+            Height of the figure. Default is 'auto'.
+        width : int, optional
+            Width of the figure. Default is 1000.
 
 
         Returns
@@ -517,11 +499,11 @@ class Consistency():
         figure
         """
         if self.x is None:
-            raise ValueError('x must be defined in the compile to display the plot')
+            raise ValueError("x must be defined in the compile to display the plot")
         if not isinstance(self.x, pd.DataFrame):
-            raise ValueError('x must be a pandas DataFrame')
+            raise ValueError("x must be a pandas DataFrame")
         if len(methods) != 2:
-            raise ValueError('Choose 2 methods among methods of the contributions')
+            raise ValueError("Choose 2 methods among methods of the contributions")
 
         # Select contributions of input methods
         pair_indices = [self.methods.index(x) for x in methods]
@@ -534,12 +516,12 @@ class Consistency():
             x = self.x.iloc[ind_max_points]
         elif isinstance(selection, list):
             if len(selection) == 1:
-                raise ValueError('Selection must include multiple points')
+                raise ValueError("Selection must include multiple points")
             else:
                 weights = [weight.iloc[selection] for weight in pair_weights]
                 x = self.x.iloc[selection]
         else:
-            raise ValueError('Parameter selection must be a list')
+            raise ValueError("Parameter selection must be a list")
 
         # Remove constant columns
         const_cols = x.loc[:, x.apply(pd.Series.nunique) == 1]
@@ -547,14 +529,18 @@ class Consistency():
         weights = [weight.drop(const_cols, axis=1) for weight in weights]
 
         # Only keep features based on largest mean of absolute values
-        mean_contributions = np.mean(np.abs(pd.concat(weights)))
+        mean_contributions = np.mean(np.abs(pd.concat(weights)), axis=0)
         top_features = np.flip(mean_contributions.sort_values(ascending=False)[:max_features].keys())
 
-        fig = self.plot_pairwise_consistency(weights, x, top_features, methods, file_name, auto_open)
+        fig = self.plot_pairwise_consistency(
+            weights, x, top_features, methods, file_name, auto_open, width=width, height=height
+        )
 
         return fig
 
-    def plot_pairwise_consistency(self, weights, x, top_features, methods, file_name, auto_open):
+    def plot_pairwise_consistency(
+        self, weights, x, top_features, methods, file_name, auto_open, width=1000, height="auto"
+    ):
         """Plot the main graph displaying distances between methods across each feature and data point
 
         Parameters
@@ -571,6 +557,10 @@ class Consistency():
             Specify the save path of html files. If it is not provided, no file will be saved.
         auto_open: bool
             open automatically the plot
+        height : str or int, optional
+            Height of the figure. Default is 'auto'.
+        width : int, optional
+            Width of the figure. Default is 1000.
 
         Returns
         -------
@@ -580,36 +570,39 @@ class Consistency():
         if isinstance(self.preprocessing, OrdinalEncoder):
             encoder = self.preprocessing
         else:
-            categorical_features = [col for col in x.columns if x[col].dtype == 'object']
-            encoder = OrdinalEncoder(cols=categorical_features,
-                                     handle_unknown='ignore',
-                                     return_df=True).fit(x)
+            categorical_features = [col for col in x.columns if x[col].dtype == "object"]
+            encoder = OrdinalEncoder(cols=categorical_features, handle_unknown="ignore", return_df=True).fit(x)
             x = encoder.transform(x)
 
-        xaxis_title = "Difference of contributions between the 2 methods" \
-                      + f"<span style='font-size: 12px;'><br />{methods[0]} - {methods[1]}</span>"
-        yaxis_title = "Top features<span style='font-size: 12px;'><br />(Ordered by mean of absolute contributions)</span>"
+        xaxis_title = (
+            "<br>Difference of contributions between the 2 methods" + f"<br><sup>{methods[0]} - {methods[1]}</sup>"
+        )
+        yaxis_title = (
+            "Top features<span style='font-size: 12px;'><br />(Ordered by mean of absolute contributions)</span>"
+        )
 
         fig = make_subplots(specs=[[{"secondary_y": True}]])
 
         # Plot the distribution
 
         for i, c in enumerate(top_features):
-
             switch = False
             if c in encoder.cols:
-
                 switch = True
 
                 mapping = encoder.mapping[encoder.cols.index(c)]["mapping"]
                 inverse_mapping = {v: k for k, v in mapping.to_dict().items()}
                 feature_value = x[c].map(inverse_mapping)
 
-            hv_text = [f"<b>Feature value</b>: {i}<br><b>{methods[0]}</b>: {j}<br><b>{methods[1]}</b>: {k}<br><b>Diff</b>: {l}"
-                       for i, j, k, l in zip(feature_value if switch else x[c].round(3),
-                                             weights[0][c].round(2),
-                                             weights[1][c].round(2),
-                                             (weights[0][c] - weights[1][c]).round(2))]
+            hv_text = [
+                f"<b>Feature value</b>: {i}<br><b>{methods[0]}</b>: {j}<br><b>{methods[1]}</b>: {k}<br><b>Diff</b>: {l}"
+                for i, j, k, l in zip(
+                    feature_value if switch else x[c].round(3),
+                    weights[0][c].round(2),
+                    weights[1][c].round(2),
+                    (weights[0][c] - weights[1][c]).round(2),
+                )
+            ]
 
             fig.add_trace(
                 go.Violin(
@@ -619,25 +612,23 @@ class Consistency():
                     fillcolor="rgba(255, 0, 0, 0.1)",
                     line={"color": "black", "width": 0.5},
                     showlegend=False,
-                ), secondary_y=False
+                ),
+                secondary_y=False,
             )
 
             fig.add_trace(
                 go.Scatter(
                     x=(weights[0][c] - weights[1][c]).values,
-                    y=len(x)*[i] + np.random.normal(0, 0.1, len(x)),
-                    mode='markers',
-                    marker={"color": x[c].values,
-                            "colorscale": self.tuning_colorscale(x[c]),
-                            "opacity": 0.7},
+                    y=len(x) * [i] + np.random.normal(0, 0.1, len(x)),
+                    mode="markers",
+                    marker={"color": x[c].values, "colorscale": self.tuning_colorscale(x[c]), "opacity": 0.7},
                     name=c,
-                    text=len(x)*[c],
+                    text=len(x) * [c],
                     hovertext=hv_text,
-                    hovertemplate="<b>%{text}</b><br><br>" +
-                    "%{hovertext}<br>" +
-                    "<extra></extra>",
+                    hovertemplate="<b>%{text}</b><br><br>" + "%{hovertext}<br>" + "<extra></extra>",
                     showlegend=False,
-                ), secondary_y=True
+                ),
+                secondary_y=True,
             )
 
         # Dummy invisible plot to add the color scale
@@ -649,15 +640,17 @@ class Consistency():
                 size=1,
                 color=[x.min(), x.max()],
                 colorscale=self.tuning_colorscale(pd.Series(np.linspace(x.min().min(), x.max().max(), 10))),
-                colorbar=dict(thickness=20,
-                              lenmode="pixels",
-                              len=400,
-                              yanchor="top",
-                              y=1.1,
-                              ypad=20,
-                              title="Feature values",
-                              tickvals=[x.min().min(), x.max().max()],
-                              ticktext=["Low", "High"]),
+                colorbar=dict(
+                    thickness=20,
+                    lenmode="pixels",
+                    len=400,
+                    yanchor="top",
+                    y=1.1,
+                    ypad=20,
+                    title="Feature values",
+                    tickvals=[x.min().min(), x.max().max()],
+                    ticktext=["Low", "High"],
+                ),
                 showscale=True,
             ),
             hoverinfo="none",
@@ -666,16 +659,22 @@ class Consistency():
 
         fig.add_trace(colorbar_trace)
 
-        self._update_pairwise_consistency_fig(fig=fig,
-                                              top_features=top_features,
-                                              xaxis_title=xaxis_title,
-                                              yaxis_title=yaxis_title,
-                                              file_name=file_name,
-                                              auto_open=auto_open)
+        self._update_pairwise_consistency_fig(
+            fig=fig,
+            top_features=top_features,
+            xaxis_title=xaxis_title,
+            yaxis_title=yaxis_title,
+            file_name=file_name,
+            auto_open=auto_open,
+            height=height,
+            width=width,
+        )
 
         return fig
 
-    def _update_pairwise_consistency_fig(self, fig, top_features, xaxis_title, yaxis_title, file_name, auto_open):
+    def _update_pairwise_consistency_fig(
+        self, fig, top_features, xaxis_title, yaxis_title, file_name, auto_open, height="auto", width=1000
+    ):
         """Function used for the pairwise_consistency_plot to update the layout of the plotly figure.
 
         Parameters
@@ -692,26 +691,37 @@ class Consistency():
             Specify the save path of html files. If it is not provided, no file will be saved.
         auto_open: bool
             open automatically the plot
+        height : str or int, optional
+            Height of the figure. Default is 'auto'.
+        width : int, optional
+            Width of the figure. Default is 1000.
+
+        Returns
+        -------
+        None
         """
-        title = "Pairwise comparison of Consistency:"
-        title += "<span style='font-size: 16px;'>\
-                 <br />How are differences in contributions distributed across features?</span>"
-        dict_t = copy.deepcopy(self._style_dict["dict_title_stability"])
-        dict_xaxis = copy.deepcopy(self._style_dict["dict_xaxis"])
-        dict_yaxis = copy.deepcopy(self._style_dict["dict_yaxis"])
-        dict_xaxis['text'] = xaxis_title
-        dict_yaxis['text'] = yaxis_title
-        dict_t['text'] = title
+        if height == "auto":
+            height = max(500, 40 * len(top_features) + 300)
+        title = "<br>Pairwise comparison of Consistency:"
+        title += "<br><sup>How are differences in contributions distributed across features?</sup>"
+        dict_t = self._style_dict["dict_title_stability"] | {"text": title, "y": adjust_title_height(height)}
+        dict_xaxis = self._style_dict["dict_xaxis"] | {"text": xaxis_title}
+        dict_yaxis = self._style_dict["dict_yaxis"] | {"text": yaxis_title}
 
         fig.layout.yaxis.update(showticklabels=True)
         fig.layout.yaxis2.update(showticklabels=False)
-        fig.update_layout(template="none",
-                          title=dict_t,
-                          xaxis_title=dict_xaxis,
-                          yaxis_title=dict_yaxis,
-                          yaxis=dict(range=[-0.7, len(top_features)-0.3]),
-                          yaxis2=dict(range=[-0.7, len(top_features)-0.3]),
-                          height=max(500, 40 * len(top_features)))
+        fig.update_layout(
+            template="none",
+            autosize=False,
+            title=dict_t,
+            xaxis_title=dict_xaxis,
+            yaxis_title=dict_yaxis,
+            yaxis=dict(range=[-0.7, len(top_features) - 0.3]),
+            yaxis2=dict(range=[-0.7, len(top_features) - 0.3]),
+            height=height,
+            width=width,
+            margin={"l": 150, "r": 20, "t": 95, "b": 70},
+        )
 
         fig.update_yaxes(automargin=True, zeroline=False)
         fig.update_xaxes(automargin=True)

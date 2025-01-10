@@ -1,18 +1,24 @@
 """
 Smart State Module
 """
+
 import numpy as np
 import pandas as pd
-from shapash.decomposition.contributions import inverse_transform_contributions
-from shapash.decomposition.contributions import rank_contributions, assign_contributions
-from shapash.manipulation.filters import hide_contributions
-from shapash.manipulation.filters import cap_contributions
-from shapash.manipulation.filters import sign_contributions
-from shapash.manipulation.filters import cutoff_contributions
-from shapash.manipulation.filters import combine_masks
-from shapash.manipulation.mask import compute_masked_contributions
-from shapash.manipulation.mask import init_mask
-from shapash.manipulation.summarize import summarize, compute_features_import, group_contributions
+
+from shapash.decomposition.contributions import (
+    assign_contributions,
+    inverse_transform_contributions,
+    rank_contributions,
+)
+from shapash.manipulation.filters import (
+    cap_contributions,
+    combine_masks,
+    cutoff_contributions,
+    hide_contributions,
+    sign_contributions,
+)
+from shapash.manipulation.mask import compute_masked_contributions, init_mask
+from shapash.manipulation.summarize import compute_features_import, group_contributions, summarize
 
 
 class SmartState:
@@ -38,19 +44,13 @@ class SmartState:
             Local contributions on the original feature space (no encoding).
         """
         if not isinstance(contributions, (np.ndarray, pd.DataFrame)):
-            raise ValueError(
-                'Type of contributions must be pd.DataFrame or np.ndarray'
-            )
+            raise ValueError("Type of contributions must be pd.DataFrame or np.ndarray")
         if isinstance(contributions, np.ndarray):
-            return pd.DataFrame(
-                contributions,
-                columns=x_init.columns,
-                index=x_init.index
-            )
+            return pd.DataFrame(contributions, columns=x_init.columns, index=x_init.index)
         else:
             return contributions
 
-    def inverse_transform_contributions(self, contributions, preprocessing, agg_columns='sum'):
+    def inverse_transform_contributions(self, contributions, preprocessing, agg_columns="sum"):
         """
         Compute local contributions in the original feature space, despite category encoding.
 
@@ -62,10 +62,6 @@ class SmartState:
             Single step of preprocessing, typically a category encoder.
         agg_columns : str (default: 'sum')
             Type of aggregation performed. For Shap we want so sum contributions of one hot encoded variables.
-            For ACV we want to take any value as ACV computes contributions of coalition of variables (like
-            one hot encoded variables) differently from Shap and then give the same value to each variable of the
-            coalition. As a result we just need to take the value of one of these variables to get the contribution
-            value of the group.
 
         Returns
         -------
@@ -306,11 +302,11 @@ class SmartState:
         """
         return summarize(s_contrib, var_dict, x_sorted, mask, columns_dict, features_dict)
 
-    def compute_features_import(self, contributions):
+    def compute_features_import(self, contributions, norm=1):
         """
         Compute a relative features importance, sum of absolute values
-         ​​of the contributions for each
-         features importance compute in base 100
+        of the contributions for each
+        features importance compute in base 100
         Parameters
         ----------
         contributions: pd.DataFrame
@@ -322,7 +318,7 @@ class SmartState:
             feature importance, One row by feature,
             index of the serie = contributions.columns
         """
-        return compute_features_import(contributions)
+        return compute_features_import(contributions, norm)
 
     def compute_grouped_contributions(self, contributions, features_groups):
         """

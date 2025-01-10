@@ -1,6 +1,7 @@
 """
 Mask module
 """
+
 import numpy as np
 import numpy.ma as ma
 import pandas as pd
@@ -22,15 +23,9 @@ def compute_masked_contributions(s_contrib, mask):
     pd.DataFrame
         Sum of contributions of hidden features.
     """
-    colname = ['masked_neg', 'masked_pos']
-    hidden_neg = np.sum(
-        ma.array(s_contrib, mask=np.max(np.dstack([mask, (s_contrib > 0)]), axis=2)),
-        axis=1
-    )
-    hidden_pos = np.sum(
-        ma.array(s_contrib, mask=np.max(np.dstack([mask, (s_contrib < 0)]), axis=2)),
-        axis=1
-    )
+    colname = ["masked_neg", "masked_pos"]
+    hidden_neg = np.sum(ma.array(s_contrib, mask=np.max(np.dstack([mask, (s_contrib > 0)]), axis=2)), axis=1)
+    hidden_pos = np.sum(ma.array(s_contrib, mask=np.max(np.dstack([mask, (s_contrib < 0)]), axis=2)), axis=1)
     hidden_contrib = np.array([hidden_neg, hidden_pos])
     return pd.DataFrame(hidden_contrib.T, columns=colname, index=s_contrib.index)
 
@@ -56,8 +51,4 @@ def init_mask(s_contrib, value=True):
     else:
         mask = np.zeros(s_contrib.shape, dtype=bool)
 
-    return pd.DataFrame(
-        mask,
-        columns=s_contrib.columns,
-        index=s_contrib.index
-    )
+    return pd.DataFrame(mask, columns=s_contrib.columns, index=s_contrib.index)

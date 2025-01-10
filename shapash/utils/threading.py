@@ -1,8 +1,10 @@
 """
 Override threading custom module
 """
+
 import sys
 import threading
+
 
 class CustomThread(threading.Thread):
     """
@@ -13,16 +15,17 @@ class CustomThread(threading.Thread):
     threading : threading.Thread
         Thread which you want to instanciate
     """
+
     def __init__(self, *args, **keywords):
         threading.Thread.__init__(self, *args, **keywords)
         self.killed = False
         self.__run_backup = None
 
     def start(self):
+        """Starts the thread"""
         self.__run_backup = self.run
         self.run = self.__run
         threading.Thread.start(self)
-
 
     def __run(self):
         sys.settrace(self.globaltrace)
@@ -33,7 +36,7 @@ class CustomThread(threading.Thread):
         """
         Track the global trace
         """
-        if event == 'call':
+        if event == "call":
             return self.localtrace
         else:
             return None
@@ -43,7 +46,7 @@ class CustomThread(threading.Thread):
         Track the local trace
         """
         if self.killed:
-            if event == 'line':
+            if event == "line":
                 raise SystemExit()
         return self.localtrace
 
